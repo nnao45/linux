@@ -183,6 +183,14 @@ static void timens_setup_vdso_data(struct vdso_data *vdata,
 	struct timens_offset monotonic = offset_from_ts(ns->offsets.monotonic);
 	struct timens_offset boottime = offset_from_ts(ns->offsets.boottime);
 
+	struct timespec64 ts = {0, 0};
+        ktime_get_ts64(&ts);
+
+	monotonic.init_ts = ts;
+        boottime.init_ts = ts;
+        monotonic.factor = 10;
+        boottime.factor = 10;
+
 	vdata->seq			= 1;
 	vdata->clock_mode		= VDSO_CLOCKMODE_TIMENS;
 	offset[CLOCK_MONOTONIC]		= monotonic;

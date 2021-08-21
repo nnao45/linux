@@ -4,6 +4,7 @@
  */
 #include <vdso/datapage.h>
 #include <vdso/helpers.h>
+#include <linux/time64.h>
 
 #ifndef vdso_calc_delta
 /*
@@ -46,15 +47,41 @@ static inline bool vdso_cycles_ok(u64 cycles)
 #endif
 
 #ifdef CONFIG_TIME_NS
+struct timespec64 __ns_to_timespec64(const s64 nsec)
+{
+        struct timespec64 ts = { 0, 0 };
+        s32 rem;
+
+        if (likely(nsec > 0)) {
+                ts.tv_sec = div_u64_rem(nsec, NSEC_PER_SEC, &rem);
+                ts.tv_nsec = rem;
+        } else if (nsec < 0) {
+                /*
+                 * With negative times, tv_sec points to the earlier
+                 * second, and tv_nsec counts the nanoseconds since
+                 * then, so tv_nsec is always a positive number.
+                 */
+                ts.tv_sec = -div_u64_rem(-nsec - 1, NSEC_PER_SEC, &rem) - 1;
+                ts.tv_nsec = NSEC_PER_SEC - rem - 1;
+        }
+
+        return ts;
+}
+#endif
+
+#ifdef CONFIG_TIME_NS
 static int do_hres_timens(const struct vdso_data *vdns, clockid_t clk,
 			  struct __kernel_timespec *ts)
 {
 	const struct vdso_data *vd = __arch_get_timens_vdso_data();
 	const struct timens_offset *offs = &vdns->offset[clk];
 	const struct vdso_timestamp *vdso_ts;
-	u64 cycles, last, ns;
+	const s64 factor = offs->factor;
+	struct timespec64 init_timespec = offs->init_ts;
+        struct timespec64 result_timespec;
+	u64 cycles, last, now_ns, init_ns, ns;
 	u32 seq;
-	s64 sec;
+	s64 sec, result;
 
 	if (clk != CLOCK_MONOTONIC_RAW)
 		vd = &vd[CS_HRES_COARSE];
@@ -86,8 +113,15 @@ static int do_hres_timens(const struct vdso_data *vdns, clockid_t clk,
 	 * Do this outside the loop: a race inside the loop could result
 	 * in __iter_div_u64_rem() being extremely slow.
 	 */
-	ts->tv_sec = sec + __iter_div_u64_rem(ns, NSEC_PER_SEC, &ns);
-	ts->tv_nsec = ns;
+	// ts->tv_sec = sec + __iter_div_u64_rem(ns, NSEC_PER_SEC, &ns);
+	// ts->tv_nsec = ns;
+        sec += __iter_div_u64_rem(ns, NSEC_PER_SEC, &ns);
+        now_ns = sec * 1000000000 + ns;
+        init_ns = timespec64_to_ns(&init_timespec);
+        result = init_ns + (now_ns - init_ns) * factor;
+        result_timespec = __ns_to_timespec64(result);
+        ts->tv_sec = result_timespec.tv_sec;
+        ts->tv_nsec = result_timespec.tv_nsec;
 
 	return 0;
 }

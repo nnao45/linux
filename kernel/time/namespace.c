@@ -106,6 +106,9 @@ static struct time_namespace *clone_time_ns(struct user_namespace *user_ns,
 	ns->ns.ops = &timens_operations;
 	ns->user_ns = get_user_ns(user_ns);
 	ns->offsets = old_ns->offsets;
+	ns->factors.realtime = 5;
+	ns->factors.boottime = 5;
+	ns->factors.monotonic = 5;
 	ns->frozen_offsets = false;
 	return ns;
 

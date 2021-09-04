@@ -17,11 +17,18 @@ struct timens_offsets {
 	struct timespec64 realtime;
 };
 
+struct timens_factors {
+        s64 monotonic;
+        s64 boottime;
+        s64 realtime;
+};
+
 struct time_namespace {
 	struct user_namespace	*user_ns;
 	struct ucounts		*ucounts;
 	struct ns_common	ns;
 	struct timens_offsets	offsets;
+	struct timens_factors	factors;
 	struct page		*vvar_page;
 	/* If set prevents changing offsets after any task joined namespace. */
 	bool			frozen_offsets;
@@ -102,6 +109,35 @@ static inline ktime_t timens_ktime_to_host(clockid_t clockid, ktime_t tim)
 		return tim;
 
 	return do_timens_ktime_to_host(clockid, tim, &ns->offsets);
+}
+
+static inline void timens_hrtimer_set_expires_range_ns(struct hrtimer *timer, ktime_t time, u64 delta)
+{
+	struct time_namespace *ns = current->nsproxy->time_ns;
+	struct timens_factors factors = ns->factors;
+	s64 target_factor;
+
+	if (likely(ns == &init_time_ns)) {
+		target_factor = 1;
+	} else {
+		switch (timer->base->clockid) {
+			case CLOCK_MONOTONIC:
+				target_factor = factors.monotonic;
+				break;
+			case CLOCK_BOOTTIME:
+				target_factor = factors.boottime;
+				break;
+			case CLOCK_REALTIME:
+				target_factor = factors.realtime;
+				break;
+			default:
+				target_factor = 1;
+				break;
+		}
+	}
+
+	timer->_softexpires = time / target_factor;
+	timer->node.expires = ktime_add_safe(time / target_factor, ns_to_ktime(delta));
 }
 
 #else

@@ -1945,7 +1945,13 @@ long hrtimer_nanosleep(ktime_t rqtp, const enum hrtimer_mode mode,
 		slack = 0;
 
 	hrtimer_init_sleeper_on_stack(&t, clockid, mode);
-	hrtimer_set_expires_range_ns(&t.timer, rqtp, slack);
+
+	if (mode & HRTIMER_MODE_REL)
+                timens_hrtimer_set_expires_range_ns(&t.timer, rqtp, slack);
+
+        if (mode & HRTIMER_MODE_ABS)
+                hrtimer_set_expires_range_ns(&t.timer, rqtp, slack);
+
 	ret = do_nanosleep(&t, mode);
 	if (ret != -ERESTART_RESTARTBLOCK)
 		goto out;

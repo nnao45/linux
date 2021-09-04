@@ -182,20 +182,28 @@ static void timens_setup_vdso_data(struct vdso_data *vdata,
 	struct timens_offset *offset = vdata->offset;
 	struct timens_offset monotonic = offset_from_ts(ns->offsets.monotonic);
 	struct timens_offset boottime = offset_from_ts(ns->offsets.boottime);
+	struct timens_offset realtime = offset_from_ts(ns->offsets.realtime);
 
-	struct timespec64 ts = {0, 0};
-        ktime_get_ts64(&ts);
+	struct timespec64 m = {0, 0};
+	struct timespec64 r = {0, 0};
+	struct timespec64 b = {0, 0};
+        ktime_get_ts64(&m);
+	ktime_get_real_ts64(&r);
+	ktime_get_boottime_ts64(&b);
 
-	monotonic.init_ts = ts;
-        boottime.init_ts = ts;
-        monotonic.factor = 10;
-        boottime.factor = 10;
+	monotonic.init_ts = m;
+	realtime.init_ts = r;
+        boottime.init_ts = b;
+        monotonic.factor = 5;
+	realtime.factor = 5;
+        boottime.factor = 5;
 
 	vdata->seq			= 1;
 	vdata->clock_mode		= VDSO_CLOCKMODE_TIMENS;
 	offset[CLOCK_MONOTONIC]		= monotonic;
 	offset[CLOCK_MONOTONIC_RAW]	= monotonic;
 	offset[CLOCK_MONOTONIC_COARSE]	= monotonic;
+	offset[CLOCK_REALTIME]          = realtime;
 	offset[CLOCK_BOOTTIME]		= boottime;
 	offset[CLOCK_BOOTTIME_ALARM]	= boottime;
 }
